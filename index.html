@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OmniData AI | Intelligent Semantic Suite</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --panel: #161b22;
+            --border: #30363d;
+            --accent: #58a6ff;
+            --text: #c9d1d9;
+            --sidebar-w: 400px; /* Widened further to prevent scrollbars */
+        }
+
+        body, html {
+            margin: 0; padding: 0;
+            width: 100vw; height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            height: 60px;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            padding: 0 25px;
+            flex-shrink: 0;
+        }
+
+        main { flex-grow: 1; display: flex; min-height: 0; }
+
+        #sidebar {
+            width: var(--sidebar-w);
+            background: var(--panel);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+            overflow-x: hidden;
+            overflow-y: auto;
+        }
+
+        .sidebar-section { padding: 30px; border-bottom: 1px solid var(--border); }
+        .section-label { 
+            font-size: 11px; font-weight: 800; color: #8b949e; 
+            text-transform: uppercase; letter-spacing: 1px; margin-bottom: 15px; display: block; 
+        }
+
+        #context-input {
+            width: 100%; height: 100px; background: #0d1117; color: white;
+            border: 1px solid var(--accent); border-radius: 6px; padding: 12px;
+            font-family: inherit; resize: none; margin-bottom: 15px; box-sizing: border-box;
+            font-size: 14px; outline: none;
+        }
+
+        select, input[type="range"] {
+            width: 100%; background: #0d1117; color: white; border: 1px solid var(--border);
+            padding: 12px; border-radius: 6px; margin-top: 8px; cursor: pointer;
+        }
+
+        .variable-item { margin-bottom: 25px; }
+        .variable-label { display: flex; justify-content: space-between; font-size: 14px; color: #8b949e; margin-bottom: 6px; }
+
+        /* Tooltips */
+        .tooltip-wrap { position: relative; display: inline-block; cursor: help; border-bottom: 1px dashed var(--accent); }
+        .tooltip-text {
+            visibility: hidden; width: 260px; background-color: #30363d; color: #fff;
+            text-align: center; border-radius: 6px; padding: 12px; position: absolute;
+            z-index: 100; bottom: 125%; left: 50%; transform: translateX(-50%);
+            opacity: 0; transition: opacity 0.3s; font-size: 12px; line-height: 1.4;
+            pointer-events: none; border: 1px solid var(--accent); box-shadow: 0 8px 20px rgba(0,0,0,0.5);
+        }
+        .tooltip-wrap:hover .tooltip-text { visibility: visible; opacity: 1; }
+
+        /* Content */
+        #content-area {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 35px;
+            background: #0b0e14;
+            min-width: 0;
+            gap: 25px;
+        }
+
+        #graph-header h2 { margin: 0; font-size: 1.8rem; color: #fff; }
+
+        #graph-container {
+            flex-grow: 1;
+            background: #161b22;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 30px;
+            position: relative;
+        }
+
+        #ai-summary {
+            height: 200px;
+            flex-shrink: 0;
+            background: rgba(88, 166, 255, 0.04);
+            border: 1px solid var(--accent);
+            border-radius: 12px;
+            padding: 25px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: inset 0 0 20px rgba(88,166,255,0.05);
+        }
+
+        .btn-run {
+            width: 100%; background: var(--accent); color: #000; border: none;
+            padding: 15px; border-radius: 6px; font-weight: bold; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 1px; transition: filter 0.2s;
+        }
+        .btn-run:hover { filter: brightness(1.1); }
+    </style>
+</head>
+<body>
+
+<header>
+    <div style="font-weight: bold; font-size: 1.4rem;">OMNIDATA <span style="color: var(--accent);">AI ENGINE</span></div>
+</header>
+
+<main>
+    <div id="sidebar">
+        <div class="sidebar-section">
+            <span class="section-label">1. Natural Language Context</span>
+            <textarea id="context-input" placeholder="Example: Chickenpox outbreak exposed 50 people..."></textarea>
+            <button class="btn-run" onclick="processAIContext()">Analyze Context</button>
+        </div>
+
+        <div class="sidebar-section">
+            <span class="section-label">2. Industry Focus</span>
+            <select id="main-topic-select" onchange="loadTopic()">
+                <option value="epidemiology">Epidemiology (SIR Virus Spread)</option>
+                <option value="economics">Economics (Inflation & Growth)</option>
+                <option value="psychology">Psychology (Stress-Performance)</option>
+                <option value="environment">Environment (Carbon Projection)</option>
+                <option value="education">Education (Ratio vs Scores)</option>
+                <option value="social">Social (Screen Time Impact)</option>
+            </select>
+        </div>
+
+        <div class="sidebar-section">
+            <span class="section-label">3. Calculated Parameters</span>
+            <div id="variable-inputs"></div>
+        </div>
+    </div>
+
+    <div id="content-area">
+        <div id="graph-header">
+            <div class="tooltip-wrap">
+                <h2 id="current-graph-title">System Ready</h2>
+                <div class="tooltip-text">This graph uses high-precision mathematical models to project trends based on your semantic or manual inputs.</div>
+            </div>
+        </div>
+
+        <div id="graph-container">
+            <canvas id="mainChart"></canvas>
+        </div>
+
+        <div id="ai-summary">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <span id="summary-title" style="font-weight: bold; color: var(--accent); font-size: 13px; letter-spacing: 1px;">AI ANALYTICAL REPORT</span>
+                <span style="font-size: 10px; color: var(--accent); opacity: 0.6;">DENSITY: HIGH</span>
+            </div>
+            <div id="summary-text" style="font-size: 14px; line-height: 1.8; color: #acbac7; overflow-y: auto;">
+                Awaiting context... Provide a scenario like "measles outbreak" or "10% hyperinflation" for a detailed numerical analysis.
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+    let myChart = null;
+
+    // AI Knowledge Base Mapping
+    const knowledgeBase = [
+        { keys: ["chickenpox", "chicken pox", "varicella"], topic: "epidemiology", r0: 10, dur: 10, name: "Chickenpox" },
+        { keys: ["measles", "rubeola"], topic: "epidemiology", r0: 16, dur: 12, name: "Measles" },
+        { keys: ["covid", "corona"], topic: "epidemiology", r0: 3, dur: 14, name: "COVID-19" },
+        { keys: ["flu", "influenza"], topic: "epidemiology", r0: 1.5, dur: 5, name: "Seasonal Flu" },
+        { keys: ["inflation", "hyperinflation"], topic: "economics", rate: 8, name: "Inflationary event" },
+        { keys: ["growth", "gdp"], topic: "economics", rate: 4, name: "Economic Growth" },
+        { keys: ["recession"], topic: "economics", rate: -3, name: "Economic Recession" },
+        { keys: ["stress", "performance", "arousal", "pressure"], topic: "psychology", name: "Yerkes-Dodson Analysis" },
+        { keys: ["carbon", "warming", "climate", "co2"], topic: "environment", name: "Environmental Projection" }
+    ];
+
+    const configs = {
+        epidemiology: {
+            title: "Epidemiological Spread Dynamics",
+            xLabel: "Days", yLabel: "Active Cases",
+            vars: [
+                { id: 'r0', label: 'Reproduction No. (R₀)', min: 0.1, max: 20, step: 0.1, val: 2.5, help: "Number of secondary infections from one host." },
+                { id: 'exp', label: 'Initial Exposure', min: 1, max: 1000, step: 1, val: 10, help: "Number of individuals infected at Day 0." },
+                { id: 'dur', label: 'Infectious Duration', min: 2, max: 30, step: 1, val: 14, help: "Days until a person recovers." }
+            ],
+            calc: (v) => {
+                const labels = Array.from({length: 60}, (_, i) => i);
+                let s = 100000; let i = v.exp; let data = [];
+                for(let d=0; d<60; d++) {
+                    let nI = (v.r0 / v.dur) * i * (s/100000);
+                    let nR = i / v.dur;
+                    s -= nI; i += (nI - nR);
+                    data.push(Math.round(i));
+                }
+                return { labels, data, color: '#bc13fe' };
+            },
+            summarize: (v, res) => {
+                const peakVal = Math.max(...res.data);
+                const peakDay = res.data.indexOf(peakVal);
+                return `Biological modeling of this outbreak (R₀: ${v.r0}) indicates a critical velocity. Starting with ${v.exp} individuals, the prevalence accelerates to a peak of ${peakVal.toLocaleString()} concurrent cases by Day ${peakDay}. Total system stress is highest at Day ${peakDay}, where case volume is ${Math.round(peakVal / v.exp)}x higher than initial exposure. Mitigation is required before Day ${Math.round(peakDay/2)}.`;
+            }
+        },
+        economics: {
+            title: "Macroeconomic Valuation Projection",
+            xLabel: "Months", yLabel: "Asset Value ($)",
+            vars: [
+                { id: 'rate', label: 'Annual Change Rate %', min: -50, max: 100, step: 0.5, val: 5, help: "Rate of growth or inflation per year." },
+                { id: 'start', label: 'Base Capital', min: 100, max: 10000, step: 100, val: 1000, help: "Starting value." }
+            ],
+            calc: (v) => {
+                const labels = Array.from({length: 36}, (_, i) => i);
+                let data = labels.map(m => v.start * Math.pow(1 + (v.rate/100)/12, m));
+                return { labels, data, color: '#d29922' };
+            },
+            summarize: (v, res) => {
+                const final = res.data[res.data.length-1].toFixed(2);
+                const roi = (((final - v.start)/v.start)*100).toFixed(1);
+                return `Econometric analysis shows that a ${v.rate}% change rate on a $${v.start.toLocaleString()} base results in a $${parseFloat(final).toLocaleString()} value after 36 months. This represents a total compounding delta of ${roi}%. In a hyperinflationary context, this signifies a massive loss of purchasing power, whereas in a growth context, it shows steady portfolio expansion.`;
+            }
+        },
+        psychology: {
+            title: "Stress vs Performance Efficiency",
+            xLabel: "Arousal / Stress", yLabel: "Efficiency %",
+            vars: [{ id: 'stress', label: 'Stress Index', min: 0, max: 100, step: 1, val: 50, help: "Pressure level on the subject." }],
+            calc: (v) => {
+                const labels = Array.from({length: 101}, (_, i) => i);
+                const data = labels.map(x => -0.04 * Math.pow(x - 50, 2) + 100);
+                return { labels, data, color: '#58a6ff', point: v.stress };
+            },
+            summarize: (v) => {
+                const eff = (-0.04 * Math.pow(v.stress - 50, 2) + 100).toFixed(1);
+                let desc = v.stress < 40 ? "under-stimulated" : v.stress > 60 ? "experiencing cognitive overload" : "in the optimal flow zone";
+                return `Yerkes-Dodson Law dictates that performance is a parabolic function of stress. At a stress index of ${v.stress}, the subject's efficiency is ${eff}%. Currently, the subject is ${desc}. To reach 100% efficiency, stress must be regulated toward the 50-point median.`;
+            }
+        },
+        environment: {
+            title: "CO2 Concentration Projection",
+            xLabel: "Years (from 2024)", yLabel: "PPM Density",
+            vars: [
+                { id: 'emit', label: 'Emission Increase %', min: -5, max: 10, step: 0.1, val: 1.5, help: "Annual growth in global emissions." },
+                { id: 'curr', label: 'Base PPM', min: 350, max: 550, step: 1, val: 420, help: "Starting CO2 concentration." }
+            ],
+            calc: (v) => {
+                const labels = Array.from({length: 50}, (_, i) => i);
+                let data = labels.map(y => v.curr * Math.pow(1 + v.emit/100, y));
+                return { labels, data, color: '#3fb950' };
+            },
+            summarize: (v, res) => {
+                const delta = (res.data[49] - v.curr).toFixed(1);
+                return `Climatological data projects a ${delta} PPM increase over 50 years. Starting at ${v.curr} PPM, the atmosphere reaches ${res.data[49].toFixed(1)} PPM by year 50. This trajectory requires a growth rate shift to -2.0% to maintain Holocene stability.`;
+            }
+        },
+        education: {
+            title: "Class Size Impact Model",
+            xLabel: "Students per Teacher", yLabel: "Test Score Projection",
+            vars: [{ id: 'ratio', label: 'Student Ratio', min: 10, max: 45, step: 1, val: 22, help: "Class size per instructor." }],
+            calc: (v) => {
+                const labels = Array.from({length: 36}, (_, i) => i + 10);
+                const data = labels.map(x => 100 - (0.06 * Math.pow(x - 10, 2)));
+                return { labels, data, color: '#f2cc60', point: v.ratio - 10 };
+            },
+            summarize: (v) => {
+                const score = (100 - (0.06 * Math.pow(v.ratio - 10, 2))).toFixed(1);
+                return `Pedagogical analysis shows that a ratio of ${v.ratio}:1 correlates with an average test score of ${score}%. Increasing the ratio by just 5 students would drop performance to ${(100 - (0.06 * Math.pow(v.ratio + 5 - 10, 2))).toFixed(1)}%, illustrating the high sensitivity of instructional efficacy to class density.`;
+            }
+        },
+        social: {
+            title: "Digital Saturation Index",
+            xLabel: "Screen Hours / Day", yLabel: "Mental Health Score",
+            vars: [{ id: 'hrs', label: 'Daily Screen Time', min: 0, max: 14, step: 0.5, val: 4, help: "Hours spent on digital devices." }],
+            calc: (v) => {
+                const labels = Array.from({length: 29}, (_, i) => i / 2);
+                const data = labels.map(x => 100 / (1 + Math.exp(0.6 * (x - 7))));
+                return { labels, data, color: '#f85149', point: v.hrs * 2 };
+            },
+            summarize: (v) => {
+                const score = (100 / (1 + Math.exp(0.6 * (v.hrs - 7)))).toFixed(1);
+                return `Sociological modeling identifies ${v.hrs} hours of daily usage as resulting in a Mental Health Index of ${score}. The data shows a precipitous decline once usage exceeds the 7-hour 'inflection point'. Every hour added beyond this threshold results in a near-exponential decay of social connectivity scores.`;
+            }
+        }
+    };
+
+    function processAIContext() {
+        const text = document.getElementById('context-input').value.toLowerCase();
+        let match = null;
+
+        // 1. Find the keyword match in Knowledge Base
+        for (let item of knowledgeBase) {
+            if (item.keys.some(k => text.includes(k))) {
+                match = item; break;
+            }
+        }
+
+        if (match) {
+            // Set Topic and build UI
+            document.getElementById('main-topic-select').value = match.topic;
+            loadTopic();
+
+            // USE TIMEOUT: This ensures the sliders are actually built in the DOM 
+            // before we try to set their values.
+            setTimeout(() => {
+                const num = text.match(/\d+/);
+                const val = num ? parseInt(num[0]) : null;
+
+                if (match.topic === "epidemiology") {
+                    document.getElementById('r0').value = match.r0 || 2.5;
+                    document.getElementById('dur').value = match.dur || 14;
+                    if (val) document.getElementById('exp').value = val;
+                } else if (match.topic === "economics") {
+                    if (val) document.getElementById('rate').value = val;
+                } else if (match.topic === "psychology") {
+                    if (val) document.getElementById('stress').value = val;
+                }
+                
+                syncLabels();
+                runSimulation();
+                updateSummaryTitle(`AI Analysis: ${match.name || "Custom Context"}`);
+            }, 50);
+        } else {
+            runSimulation();
+            updateSummaryTitle("Manual Parameter Analysis");
+        }
+    }
+
+    function loadTopic() {
+        const key = document.getElementById('main-topic-select').value;
+        const config = configs[key];
+        const container = document.getElementById('variable-inputs');
+        container.innerHTML = '';
+
+        config.vars.forEach(v => {
+            const div = document.createElement('div');
+            div.className = 'variable-item';
+            div.innerHTML = `
+                <div class="variable-label">
+                    <div class="tooltip-wrap">${v.label}<div class="tooltip-text">${v.help}</div></div>
+                    <span id="lbl-${v.id}" style="color: var(--accent); font-weight:bold;">${v.val}</span>
+                </div>
+                <input type="range" id="${v.id}" min="${v.min}" max="${v.max}" step="${v.step}" value="${v.val}" 
+                    oninput="document.getElementById('lbl-${v.id}').innerText=this.value; runSimulation();">
+            `;
+            container.appendChild(div);
+        });
+        runSimulation();
+    }
+
+    function syncLabels() {
+        const key = document.getElementById('main-topic-select').value;
+        configs[key].vars.forEach(v => {
+            const el = document.getElementById(v.id);
+            if(el) document.getElementById(`lbl-${v.id}`).innerText = el.value;
+        });
+    }
+
+    function updateSummaryTitle(t) {
+        document.getElementById('summary-title').innerText = t.toUpperCase();
+    }
+
+    function runSimulation() {
+        const key = document.getElementById('main-topic-select').value;
+        const config = configs[key];
+        const inputs = {};
+        config.vars.forEach(v => { inputs[v.id] = parseFloat(document.getElementById(v.id).value); });
+
+        const results = config.calc(inputs);
+        document.getElementById('current-graph-title').innerText = config.title;
+        document.getElementById('summary-text').innerText = config.summarize(inputs, results);
+        renderChart(results, config.xLabel, config.yLabel);
+    }
+
+    function renderChart(res, xl, yl) {
+        const ctx = document.getElementById('mainChart').getContext('2d');
+        if (myChart) myChart.destroy();
+
+        const datasets = [{
+            label: 'Data Stream', data: res.data, borderColor: res.color,
+            backgroundColor: res.color + '10', fill: true, tension: 0.3, pointRadius: 0
+        }];
+
+        if(res.point !== undefined) {
+            datasets.push({
+                label: 'Current State', data: [{x: res.point, y: res.data[res.point]}],
+                type: 'scatter', backgroundColor: '#fff', pointRadius: 10, pointBorderWidth: 2, pointBorderColor: res.color
+            });
+        }
+
+        myChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels: res.labels, datasets: datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { title: { display: true, text: xl, color: '#8b949e', font: {size: 11, weight:'bold'} }, grid: { color: '#30363d' }, ticks: { color: '#8b949e' } },
+                    y: { title: { display: true, text: yl, color: '#8b949e', font: {size: 11, weight:'bold'} }, grid: { color: '#30363d' }, ticks: { color: '#8b949e' } }
+                }
+            }
+        });
+    }
+
+    window.onload = loadTopic;
+</script>
+
+</body>
+</html>
